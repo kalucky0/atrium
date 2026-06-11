@@ -1,0 +1,19 @@
+{
+  "name": "atrium",
+  "private": true,
+  "type": "module",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "db:generate": "bun --filter @atrium/db db:generate",
+    "db:migrate": "bun --filter @atrium/db db:migrate",
+    "db:seed": "bun --filter @atrium/db db:seed",
+    "dev:api": "bun --filter @atrium/api dev",
+    "dev:web": "bun --filter @atrium/web dev",
+    "test": "bun --filter '@atrium/*' test",
+    "test:e2e": "bun --filter @atrium/web test:e2e"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.7"
+  }
+}
