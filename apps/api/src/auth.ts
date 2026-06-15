@@ -1,0 +1,9 @@
+import { betterAuth } from "better-auth";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { db, schema } from "@atrium/db";
+
+export const auth = betterAuth({
+  database: drizzleAdapter(db, { provider: "pg", schema }),
+  emailAndPassword: { enabled: true },
+  trustedOrigins: [process.env.WEB_ORIGIN ?? "http://localhost:5173"],
+});

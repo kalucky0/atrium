@@ -1,4 +1,7 @@
 import { customType, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { user } from "./auth-schema";
+
+export * from "./auth-schema";
 
 // Postgres tstzrange has no built-in Drizzle type — declare it via customType.
 export const tstzrange = customType<{ data: string; driverData: string }>({
@@ -20,7 +23,9 @@ export const reservation = pgTable("reservation", {
   resourceId: uuid("resource_id")
     .notNull()
     .references(() => resource.id, { onDelete: "cascade" }),
-  userId: text("user_id").notNull(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
   during: tstzrange("during").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

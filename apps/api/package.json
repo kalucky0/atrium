@@ -1,0 +1,24 @@
+{
+  "name": "@atrium/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "bun --env-file=../../.env run --hot src/index.ts",
+    "start": "bun run src/index.ts",
+    "auth:generate": "bunx @better-auth/cli@latest generate --config ./src/auth.ts --output ../../packages/db/src/auth-schema.ts --yes"
+  },
+  "dependencies": {
+    "@atrium/db": "workspace:*",
+    "@trpc/server": "^11.18.0",
+    "better-auth": "^1.6",
+    "drizzle-orm": "^0.45.2",
+    "hono": "^4.12",
+    "superjson": "^2",
+    "zod": "^4"
+  }
+}
