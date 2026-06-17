@@ -1,15 +1,124 @@
-# atrium
+# Atrium
 
-To install dependencies:
+Szkielet webowej aplikacji do rezerwacji sal/sprzętu (modularny monolit, monorepo Bun).
+**Rdzeń logiki rezerwacji jest celowo niezaimplementowany** — patrz [TODO](#todo).
+
+## Stack
+
+| Warstwa | Technologia |
+|---|---|
+| Monorepo / runtime | Bun workspaces, Bun 1.3 |
+| HTTP | Hono 4 |
+| API | tRPC v11 (fetch adapter) + Zod 4 + superjson |
+| Auth | Better Auth 1.6 (Drizzle adapter `provider: "pg"`, email+hasło, sesje w cookies) |
+| Baza | PostgreSQL 17 |
+| ORM / migracje | Drizzle ORM 0.45 + drizzle-kit 0.31 (driver `postgres` / postgres-js) |
+| Frontend | React 19 + Vite 8 (SPA) |
+| Routing | TanStack Router 1 (file-based) |
+| Server-state | TanStack Query 5 (`@trpc/react-query`) |
+| Testy | Vitest 3 (unit) + Playwright 1 (e2e) |
+| Konteneryzacja | Docker + docker-compose |
+
+## Struktura
+
+```
+atrium/
+├─ docker-compose.yml         # db + api + web
+├─ .env.example
+├─ packages/db/               # Drizzle: schema, klient, migracje, seed
+│  ├─ src/schema.ts           #   resource, reservation, re-eksport auth-schema
+│  ├─ src/auth-schema.ts      #   tabele Better Auth (user/session/account/verification)
+│  ├─ src/index.ts            #   klient drizzle (postgres-js)
+│  ├─ src/migrate.ts          #   programatyczny migrator
+│  ├─ src/seed.ts
+│  └─ drizzle/                #   wygenerowane migracje SQL (0000–0002)
+└─ apps/
+   ├─ api/                    # Hono + tRPC + Better Auth
+   │  └─ src/trpc/routers/    #   resource (CRUD, wzorzec), reservation (stub)
+   └─ web/                    # React + Vite + TanStack Router/Query
+      └─ src/routes/          #   login, resources (lista+create), resources/$id (detale)
+```
+
+## Uruchomienie
+
+Wymagania: **Docker** (z Docker Compose) oraz **Bun** (do trybu deweloperskiego).
 
 ```bash
+cp .env.example .env        # uzupełnij sekrety; do dev wartości domyślne wystarczą
+```
+
+### Wariant A — całość w Dockerze
+
+```bash
+docker compose up -d --build
+```
+
+- Web: <http://localhost:5173>
+- API: <http://localhost:3001> (zdrowie: `/health`)
+- Migracje uruchamiają się automatycznie przed startem API.
+
+Dane demo (kilka zasobów) — opcjonalnie:
+
+```bash
+docker compose exec api bun run packages/db/src/seed.ts
+```
+
+Zatrzymanie: `docker compose down` (dane w wolumenie `pgdata` zostają).
+
+### Wariant B — dev (baza w Dockerze, aplikacje lokalnie)
+
+```bash
+docker compose up -d db          # sam Postgres
 bun install
+bun run db:migrate               # migracje (w tym constraint EXCLUDE)
+bun run db:seed                  # opcjonalne dane demo
+bun run dev:api                  # API na :3001 (hot reload)
+bun run dev:web                  # Vite na :5173
 ```
 
-To run:
+## Testy
 
 ```bash
-bun run index.ts
+bun run test                     # Vitest (apps/api) — bez bazy
+bunx playwright install chromium # jednorazowo, przed e2e
+bun run test:e2e                 # Playwright: smoke login -> lista (wymaga uruchomionej bazy)
 ```
 
-This project was created using `bun init` in bun v1.3.3. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+## Baza danych
+
+- `resource` i `reservation` w `packages/db/src/schema.ts`. `reservation.during` to `tstzrange`
+  (typ własny przez `customType`, brak natywnego wsparcia w builderze Drizzle).
+- **Anty-double-booking**: migracja `drizzle/0001_exclusion_constraint.sql` zakłada
+  `CREATE EXTENSION btree_gist` oraz `EXCLUDE USING gist (resource_id WITH =, during WITH &&)`
+  na `reservation`. Dwie nakładające się rezerwacje tego samego zasobu są odrzucane (Postgres `23P01`).
+- Tabele auth (`user`/`session`/`account`/`verification`) należą do **Better Auth**; domena
+  referuje do `user.id`.
+- Nowa migracja: edytuj schema → `bun run db:generate` → `bun run db:migrate`.
+
+## TODO
+
+Zostawione do implementacji:
+
+- **`reservation.create`** — `apps/api/src/trpc/routers/reservation.ts`. Tabela i constraint
+  `EXCLUDE` istnieją; do zrobienia: zbudować `during` (`tstzrange(start, end, '[)')`), wstawić
+  rezerwację, złapać kolizję (`23P01`) i zmapować na `TRPCError({ code: "CONFLICT" })`,
+  ewentualnie transakcja. Aktualnie zwraca `NOT_IMPLEMENTED`.
+- **UI rezerwacji / kalendarz** — nie zbudowane (skeleton ma tylko CRUD `resource`).
+- **Sekrety produkcyjne** — ustaw `BETTER_AUTH_SECRET` (`openssl rand -base64 32`).
+
+## Odstępstwa od pierwotnej specyfikacji
+
+Wymuszone aktualnym API bibliotek lub środowiskiem (stan na 2026-06-21):
+
+- **Port API = 3001** (nie 3000): 3000 jest na tej maszynie zajęty przez kontener innego projektu.
+- **Schemat Better Auth napisany ręcznie** (`packages/db/src/auth-schema.ts`) zgodnie z formatem
+  generatora 1.6.x. CLI (`bun run --filter @atrium/api auth:generate`) nie buduje swojej natywnej
+  zależności `better-sqlite3` na Node 26 bez Pythona — skrypt zostaje do regeneracji w CI/na maszynie
+  z toolchainem.
+- **Adapter Drizzle** importowany z subpath `better-auth/adapters/drizzle`; jeden driver
+  Postgres (`postgres`/postgres-js) dla aplikacji i auth (`provider: "pg"` to dialekt, nie driver).
+- **tRPC v11**: transformer (`superjson`) na linku (klient) i w `initTRPC.create` (serwer);
+  montaż w Hono przez `fetchRequestHandler` (bez `@hono/trpc-server`). CORS globalny w Hono
+  (Better Auth sam nie emituje nagłówków CORS ani nie obsługuje preflightu).
+- **TanStack Router**: plugin `@tanstack/router-plugin/vite` przed `react()`; `routeTree.gen.ts`
+  jest generowany i gitignorowany.

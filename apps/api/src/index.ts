@@ -9,9 +9,9 @@ const WEB_ORIGIN = process.env.WEB_ORIGIN ?? "http://localhost:5173";
 
 const app = new Hono();
 
-app.get("/health", (c) => c.json({ ok: true }));
+app.use("*", cors({ origin: WEB_ORIGIN, credentials: true }));
 
-app.use("/trpc/*", cors({ origin: WEB_ORIGIN, credentials: true }));
+app.get("/health", (c) => c.json({ ok: true }));
 
 app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 

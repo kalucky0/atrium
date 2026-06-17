@@ -14,13 +14,18 @@ function LoginPage() {
   async function go(mode: "signin" | "signup") {
     setBusy(true);
     setError(null);
-    const res =
-      mode === "signin"
-        ? await authClient.signIn.email({ email, password })
-        : await authClient.signUp.email({ email, password, name: email.split("@")[0] });
-    setBusy(false);
-    if (res.error) setError(res.error.message ?? "Nie udało się");
-    else navigate({ to: "/resources" });
+    try {
+      const res =
+        mode === "signin"
+          ? await authClient.signIn.email({ email, password })
+          : await authClient.signUp.email({ email, password, name: email.split("@")[0] });
+      if (res.error) setError(res.error.message ?? "Nie udało się");
+      else navigate({ to: "/resources" });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Błąd sieci");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (

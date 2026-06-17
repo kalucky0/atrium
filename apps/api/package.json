@@ -10,7 +10,11 @@
   "scripts": {
     "dev": "bun --env-file=../../.env run --hot src/index.ts",
     "start": "bun run src/index.ts",
+    "test": "vitest run",
     "auth:generate": "bunx @better-auth/cli@latest generate --config ./src/auth.ts --output ../../packages/db/src/auth-schema.ts --yes"
+  },
+  "devDependencies": {
+    "vitest": "^3"
   },
   "dependencies": {
     "@atrium/db": "workspace:*",

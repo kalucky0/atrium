@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
-import { resource } from "@atrium/db";
+import { resource } from "@atrium/db/schema";
 import { protectedProcedure, router } from "../trpc";
 
 export const resourceRouter = router({

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import { reservation } from "@atrium/db";
+import { reservation } from "@atrium/db/schema";
 import { protectedProcedure, router } from "../trpc";
 
 export const reservationRouter = router({
