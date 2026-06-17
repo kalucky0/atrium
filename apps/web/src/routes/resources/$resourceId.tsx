@@ -26,6 +26,11 @@ function ResourceDetail() {
     },
   });
 
+  const reservations = trpc.reservation.listByResource.useQuery({ resourceId });
+  const book = trpc.reservation.create.useMutation({
+    onSuccess: () => utils.reservation.listByResource.invalidate({ resourceId }),
+  });
+
   if (q.isPending) return <p className="muted">Ładowanie…</p>;
   if (!q.data) return <p>Nie znaleziono zasobu.</p>;
   const r = q.data;
@@ -59,6 +64,37 @@ function ResourceDetail() {
       <button className="error" disabled={del.isPending} onClick={() => del.mutate({ id: r.id })}>
         Usuń zasób
       </button>
+
+      <h2>Rezerwacje</h2>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          const fd = new FormData(e.currentTarget);
+          book.mutate({
+            resourceId,
+            start: new Date(String(fd.get("start"))),
+            end: new Date(String(fd.get("end"))),
+          });
+          e.currentTarget.reset();
+        }}
+      >
+        <input type="datetime-local" name="start" required aria-label="początek" />
+        <input type="datetime-local" name="end" required aria-label="koniec" />
+        <button disabled={book.isPending}>Zarezerwuj</button>
+      </form>
+      {book.error && <p className="error">{book.error.message}</p>}
+
+      {reservations.isPending ? (
+        <p className="muted">Ładowanie…</p>
+      ) : reservations.data && reservations.data.length > 0 ? (
+        <ul>
+          {reservations.data.map((res) => (
+            <li key={res.id}>{res.during}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="muted">Brak rezerwacji.</p>
+      )}
 
       <p className="muted">id: {r.id}</p>
     </div>

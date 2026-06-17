@@ -1,7 +1,6 @@
 # Atrium
 
 Szkielet webowej aplikacji do rezerwacji sal/sprzętu (modularny monolit, monorepo Bun).
-**Rdzeń logiki rezerwacji jest celowo niezaimplementowany** — patrz [TODO](#todo).
 
 ## Stack
 
@@ -99,12 +98,9 @@ bun run test:e2e                 # Playwright: smoke login -> lista (wymaga uruc
 
 Zostawione do implementacji:
 
-- **`reservation.create`** — `apps/api/src/trpc/routers/reservation.ts`. Tabela i constraint
-  `EXCLUDE` istnieją; do zrobienia: zbudować `during` (`tstzrange(start, end, '[)')`), wstawić
-  rezerwację, złapać kolizję (`23P01`) i zmapować na `TRPCError({ code: "CONFLICT" })`,
-  ewentualnie transakcja. Aktualnie zwraca `NOT_IMPLEMENTED`.
-- **UI rezerwacji / kalendarz** — nie zbudowane (skeleton ma tylko CRUD `resource`).
 - **Sekrety produkcyjne** — ustaw `BETTER_AUTH_SECRET` (`openssl rand -base64 32`).
+- **Kalendarz wizualny** (opcjonalnie) — obecne UI rezerwacji to natywne `datetime-local`
+  + lista terminów na stronie zasobu; siatka tygodnia nie jest zbudowana.
 
 ## Odstępstwa od pierwotnej specyfikacji
 
