@@ -15,6 +15,7 @@ function RootLayout() {
         </Link>
         {session ? (
           <span>
+            <Link to="/my-reservations">Moje rezerwacje</Link>{" "}
             <span className="muted">{session.user.email}</span>{" "}
             <button
               onClick={async () => {

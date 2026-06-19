@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { trpc } from "../../lib/trpc";
-import { requireAuth } from "../../lib/auth-client";
+import { requireAuth, useSession } from "../../lib/auth-client";
 
 export const Route = createFileRoute("/resources/$resourceId")({
   beforeLoad: requireAuth,
@@ -26,8 +26,12 @@ function ResourceDetail() {
     },
   });
 
+  const { data: session } = useSession();
   const reservations = trpc.reservation.listByResource.useQuery({ resourceId });
   const book = trpc.reservation.create.useMutation({
+    onSuccess: () => utils.reservation.listByResource.invalidate({ resourceId }),
+  });
+  const cancel = trpc.reservation.cancel.useMutation({
     onSuccess: () => utils.reservation.listByResource.invalidate({ resourceId }),
   });
 
@@ -89,7 +93,21 @@ function ResourceDetail() {
       ) : reservations.data && reservations.data.length > 0 ? (
         <ul>
           {reservations.data.map((res) => (
-            <li key={res.id}>{res.during}</li>
+            <li key={res.id}>
+              {res.during}
+              {res.userId === session?.user?.id && (
+                <>
+                  {" "}
+                  <button
+                    className="error"
+                    disabled={cancel.isPending}
+                    onClick={() => cancel.mutate({ id: res.id })}
+                  >
+                    Odwołaj
+                  </button>
+                </>
+              )}
+            </li>
           ))}
         </ul>
       ) : (
