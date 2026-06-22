@@ -7,7 +7,8 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: [
     {
-      command: "bun run dev:api",
+      command:
+        "docker compose up -d --wait db && bun run db:migrate && bun run db:seed && bun run dev:api",
       cwd: "../..",
       url: "http://127.0.0.1:3001/health",
       reuseExistingServer: true,
