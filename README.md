@@ -33,9 +33,9 @@ atrium/
 │  └─ drizzle/                #   wygenerowane migracje SQL (0000–0002)
 └─ apps/
    ├─ api/                    # Hono + tRPC + Better Auth
-   │  └─ src/trpc/routers/    #   resource (CRUD, wzorzec), reservation (stub)
+   │  └─ src/trpc/routers/    #   resource (CRUD), reservation (create/cancel/list)
    └─ web/                    # React + Vite + TanStack Router/Query
-      └─ src/routes/          #   login, resources (lista+create), resources/$id (detale)
+      └─ src/routes/          #   login, resources (lista+create), resources/$id, my-reservations
 ```
 
 ## Uruchomienie
@@ -78,7 +78,9 @@ bun run dev:web                  # Vite na :5173
 ## Testy
 
 ```bash
-bun run test                     # Vitest (apps/api) — bez bazy
+bun run test                     # Vitest (apps/api). Test integracyjny rezerwacji (kolizja
+                                 #   EXCLUDE, cancel, ownership) wymaga bazy — bez niej pomija się
+                                 #   automatycznie. Aby go odpalić: docker compose up -d db + db:migrate.
 bunx playwright install chromium # jednorazowo, przed e2e
 bun run test:e2e                 # Playwright: smoke login -> lista (wymaga uruchomionej bazy)
 ```
