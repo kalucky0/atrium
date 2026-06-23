@@ -4,18 +4,13 @@ import { TRPCError } from "@trpc/server";
 import { reservation, resource } from "@atrium/db/schema";
 import { protectedProcedure, router } from "../trpc";
 
-export const reservationRouter = router({
-  listByResource: protectedProcedure
-    .input(z.object({ resourceId: z.uuid() }))
-    .query(({ ctx, input }) =>
-      ctx.db.select().from(reservation).where(eq(reservation.resourceId, input.resourceId)),
-    ),
-
-  listByUser: protectedProcedure.query(({ ctx }) =>
+export const reservationsRouter = router({
+  mine: protectedProcedure.query(({ ctx }) =>
     ctx.db
       .select({
         id: reservation.id,
         during: reservation.during,
+        title: reservation.title,
         resourceId: reservation.resourceId,
         resourceName: resource.name,
       })
@@ -35,6 +30,7 @@ export const reservationRouter = router({
           resourceId: z.uuid(),
           start: z.date(),
           end: z.date(),
+          title: z.string().min(1).optional(),
         })
         .refine((v) => v.start < v.end, { message: "start musi być przed end", path: ["end"] }),
     )
@@ -46,7 +42,12 @@ export const reservationRouter = router({
       try {
         const [row] = await ctx.db
           .insert(reservation)
-          .values({ resourceId: input.resourceId, userId: ctx.user.id, during })
+          .values({
+            resourceId: input.resourceId,
+            userId: ctx.user.id,
+            during,
+            title: input.title ?? null,
+          })
           .returning();
         return row;
       } catch (e) {

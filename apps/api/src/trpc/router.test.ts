@@ -15,21 +15,21 @@ function ctx(user: Context["user"]): Context {
 describe("protectedProcedure auth gate", () => {
   it("rejects an unauthenticated call with UNAUTHORIZED", async () => {
     const caller = appRouter.createCaller(ctx(null));
-    await expect(caller.resource.list()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    await expect(caller.resources.list()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
   });
 });
 
 describe("zod input validation", () => {
-  it("rejects resource.byId with a non-uuid id", async () => {
+  it("rejects resources.byId with a non-uuid id", async () => {
     const caller = appRouter.createCaller(ctx({ id: "u1" } as Context["user"]));
-    await expect(caller.resource.byId({ id: "not-a-uuid" })).rejects.toBeInstanceOf(TRPCError);
+    await expect(caller.resources.byId({ id: "not-a-uuid" })).rejects.toBeInstanceOf(TRPCError);
   });
 
-  it("rejects reservation.create when start >= end", async () => {
+  it("rejects reservations.create when start >= end", async () => {
     const caller = appRouter.createCaller(ctx({ id: "u1" } as Context["user"]));
     const t = new Date();
     await expect(
-      caller.reservation.create({
+      caller.reservations.create({
         resourceId: "00000000-0000-0000-0000-000000000000",
         start: t,
         end: t,
@@ -54,7 +54,7 @@ describe("zod input validation", () => {
       db: conflictDb,
     });
     await expect(
-      caller.reservation.create({
+      caller.reservations.create({
         resourceId: "00000000-0000-0000-0000-000000000000",
         start: new Date(2026, 0, 1, 9),
         end: new Date(2026, 0, 1, 10),

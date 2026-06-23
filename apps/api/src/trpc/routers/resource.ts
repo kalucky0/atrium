@@ -3,10 +3,15 @@ import { eq } from "drizzle-orm";
 import { resource } from "@atrium/db/schema";
 import { protectedProcedure, router } from "../trpc";
 
-export const resourceRouter = router({
-  list: protectedProcedure.query(({ ctx }) =>
-    ctx.db.select().from(resource).orderBy(resource.createdAt),
-  ),
+export const resourcesRouter = router({
+  list: protectedProcedure
+    .input(z.object({ kind: z.string().min(1).optional() }).optional())
+    .query(({ ctx, input }) => {
+      const q = ctx.db.select().from(resource);
+      return input?.kind
+        ? q.where(eq(resource.kind, input.kind)).orderBy(resource.createdAt)
+        : q.orderBy(resource.createdAt);
+    }),
 
   byId: protectedProcedure
     .input(z.object({ id: z.uuid() }))
@@ -21,6 +26,7 @@ export const resourceRouter = router({
         name: z.string().min(1),
         kind: z.string().min(1).default("room"),
         description: z.string().optional(),
+        capacity: z.number().int().positive().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -35,6 +41,7 @@ export const resourceRouter = router({
         name: z.string().min(1).optional(),
         kind: z.string().min(1).optional(),
         description: z.string().nullable().optional(),
+        capacity: z.number().int().positive().nullable().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {

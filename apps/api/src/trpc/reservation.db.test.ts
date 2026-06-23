@@ -64,7 +64,7 @@ describe.skipIf(!dbUp)("reservation flow (real Postgres)", () => {
 
   it("creates a reservation", async () => {
     const rid = await makeResource();
-    const row = await caller(USER_A).reservation.create({
+    const row = await caller(USER_A).reservations.create({
       resourceId: rid,
       start: at("2026-03-01T09:00:00Z"),
       end: at("2026-03-01T10:00:00Z"),
@@ -75,13 +75,13 @@ describe.skipIf(!dbUp)("reservation flow (real Postgres)", () => {
   it("rejects an overlapping reservation with CONFLICT", async () => {
     const rid = await makeResource();
     const c = caller(USER_A);
-    await c.reservation.create({
+    await c.reservations.create({
       resourceId: rid,
       start: at("2026-03-02T09:00:00Z"),
       end: at("2026-03-02T10:00:00Z"),
     });
     await expect(
-      c.reservation.create({
+      c.reservations.create({
         resourceId: rid,
         start: at("2026-03-02T09:30:00Z"),
         end: at("2026-03-02T10:30:00Z"),
@@ -92,12 +92,12 @@ describe.skipIf(!dbUp)("reservation flow (real Postgres)", () => {
   it("allows a back-to-back reservation (half-open [) range)", async () => {
     const rid = await makeResource();
     const c = caller(USER_A);
-    await c.reservation.create({
+    await c.reservations.create({
       resourceId: rid,
       start: at("2026-03-03T09:00:00Z"),
       end: at("2026-03-03T10:00:00Z"),
     });
-    const row = await c.reservation.create({
+    const row = await c.reservations.create({
       resourceId: rid,
       start: at("2026-03-03T10:00:00Z"),
       end: at("2026-03-03T11:00:00Z"),
@@ -108,44 +108,77 @@ describe.skipIf(!dbUp)("reservation flow (real Postgres)", () => {
   it("cancels the caller's own reservation", async () => {
     const rid = await makeResource();
     const c = caller(USER_A);
-    const row = await c.reservation.create({
+    const row = await c.reservations.create({
       resourceId: rid,
       start: at("2026-03-04T09:00:00Z"),
       end: at("2026-03-04T10:00:00Z"),
     });
-    await c.reservation.cancel({ id: row!.id });
-    const after = await c.reservation.listByResource({ resourceId: rid });
+    await c.reservations.cancel({ id: row!.id });
+    const after = await c.availability.forResource({
+      resourceId: rid,
+      from: at("2026-01-01T00:00:00Z"),
+      to: at("2027-01-01T00:00:00Z"),
+    });
     expect(after.find((r) => r.id === row!.id)).toBeUndefined();
   });
 
   it("won't cancel another user's reservation (NOT_FOUND, row remains)", async () => {
     const rid = await makeResource();
-    const row = await caller(USER_A).reservation.create({
+    const row = await caller(USER_A).reservations.create({
       resourceId: rid,
       start: at("2026-03-05T09:00:00Z"),
       end: at("2026-03-05T10:00:00Z"),
     });
-    await expect(caller(USER_B).reservation.cancel({ id: row!.id })).rejects.toMatchObject({
+    await expect(caller(USER_B).reservations.cancel({ id: row!.id })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
-    const after = await caller(USER_A).reservation.listByResource({ resourceId: rid });
+    const after = await caller(USER_A).availability.forResource({
+      resourceId: rid,
+      from: at("2026-01-01T00:00:00Z"),
+      to: at("2027-01-01T00:00:00Z"),
+    });
     expect(after.find((r) => r.id === row!.id)).toBeDefined();
   });
 
-  it("listByUser returns only the caller's reservations", async () => {
+  it("mine returns only the caller's reservations", async () => {
     const rid = await makeResource();
-    const bRow = await caller(USER_B).reservation.create({
+    const bRow = await caller(USER_B).reservations.create({
       resourceId: rid,
       start: at("2026-03-06T11:00:00Z"),
       end: at("2026-03-06T12:00:00Z"),
     });
-    const aRow = await caller(USER_A).reservation.create({
+    const aRow = await caller(USER_A).reservations.create({
       resourceId: rid,
       start: at("2026-03-06T09:00:00Z"),
       end: at("2026-03-06T10:00:00Z"),
     });
-    const ids = (await caller(USER_B).reservation.listByUser()).map((r) => r.id);
+    const ids = (await caller(USER_B).reservations.mine()).map((r) => r.id);
     expect(ids).toContain(bRow!.id);
     expect(ids).not.toContain(aRow!.id);
+  });
+
+  it("availability.forResource returns only reservations overlapping the window", async () => {
+    const rid = await makeResource();
+    const c = caller(USER_A);
+    const inside = await c.reservations.create({
+      resourceId: rid,
+      start: at("2026-03-09T09:00:00Z"),
+      end: at("2026-03-09T10:00:00Z"),
+      title: "W oknie",
+    });
+    const outside = await c.reservations.create({
+      resourceId: rid,
+      start: at("2026-03-20T09:00:00Z"),
+      end: at("2026-03-20T10:00:00Z"),
+    });
+    const week = await c.availability.forResource({
+      resourceId: rid,
+      from: at("2026-03-09T00:00:00Z"),
+      to: at("2026-03-16T00:00:00Z"),
+    });
+    const ids = week.map((r) => r.id);
+    expect(ids).toContain(inside!.id);
+    expect(ids).not.toContain(outside!.id);
+    expect(week.find((r) => r.id === inside!.id)?.title).toBe("W oknie");
   });
 });
