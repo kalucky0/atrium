@@ -1,4 +1,4 @@
-import { customType, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { customType, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { user } from "./auth-schema";
 
 export * from "./auth-schema";
@@ -15,6 +15,7 @@ export const resource = pgTable("resource", {
   name: text("name").notNull(),
   kind: text("kind").notNull().default("room"),
   description: text("description"),
+  capacity: integer("capacity"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -27,6 +28,7 @@ export const reservation = pgTable("reservation", {
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
   during: tstzrange("during").notNull(),
+  title: text("title"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

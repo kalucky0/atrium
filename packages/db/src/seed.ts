@@ -9,10 +9,10 @@ if (existing.length > 0) {
 }
 
 const rows = [
-  { name: "Sala konferencyjna A", kind: "room", description: "Rzutnik, 12 miejsc" },
-  { name: "Sala konferencyjna B", kind: "room", description: "8 miejsc" },
-  { name: "Projektor Epson", kind: "equipment", description: "Przenośny, HDMI" },
-  { name: "Laptop Dell", kind: "equipment", description: null },
+  { name: "Sala konferencyjna A", kind: "room", description: "Rzutnik, 12 miejsc", capacity: 12 },
+  { name: "Sala konferencyjna B", kind: "room", description: "8 miejsc", capacity: 8 },
+  { name: "Projektor Epson", kind: "equipment", description: "Przenośny, HDMI", capacity: null },
+  { name: "Laptop Dell", kind: "equipment", description: null, capacity: null },
 ];
 
 const resources = await db.insert(resource).values(rows).returning();
@@ -23,16 +23,17 @@ const [demo] = await db
   .values({ id: "demo-user", name: "Demo", email: "demo@atrium.local" })
   .returning();
 
-const slot = (resourceId: string, start: string, end: string) => ({
+const slot = (resourceId: string, start: string, end: string, title: string) => ({
   resourceId,
   userId: demo.id,
   during: sql`tstzrange(${start}::timestamptz, ${end}::timestamptz, '[)')`,
+  title,
 });
 
 await db.insert(reservation).values([
-  slot(resources[0].id, "2026-06-26 09:00+00", "2026-06-26 10:00+00"),
-  slot(resources[0].id, "2026-06-26 11:00+00", "2026-06-26 12:00+00"),
-  slot(resources[2].id, "2026-06-26 14:00+00", "2026-06-26 15:30+00"),
+  slot(resources[0].id, "2026-06-26 09:00+00", "2026-06-26 10:00+00", "Standup zespołu"),
+  slot(resources[0].id, "2026-06-26 11:00+00", "2026-06-26 12:00+00", "Spotkanie z klientem"),
+  slot(resources[2].id, "2026-06-26 14:00+00", "2026-06-26 15:30+00", "Prezentacja"),
 ]);
 console.log("seeded 1 demo user + 3 reservations");
 process.exit(0);
