@@ -48,3 +48,52 @@ li {
 .muted {
   opacity: 0.7;
 }
+.weeknav {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+table.cal {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.5rem 0 1rem;
+}
+table.cal th,
+table.cal td {
+  border: 1px solid #8884;
+  padding: 0;
+  text-align: center;
+}
+table.cal th {
+  padding: 0.25rem;
+  font-weight: 600;
+}
+table.cal td.hour {
+  width: 3.5rem;
+  padding: 0.25rem;
+  font-variant-numeric: tabular-nums;
+}
+.slot {
+  display: block;
+  width: 100%;
+  min-height: 2rem;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.8rem;
+  line-height: 1.2;
+}
+.slot:hover:not(:disabled) {
+  background: #8882;
+}
+.slot.busy {
+  background: #8883;
+  cursor: default;
+  color: inherit;
+}
+.slot.mine {
+  background: #2e86de44;
+  cursor: pointer;
+}

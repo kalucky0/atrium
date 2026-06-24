@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { trpc } from "../lib/trpc";
 import { requireAuth } from "../lib/auth-client";
+import { formatDuring } from "../lib/week";
 
 export const Route = createFileRoute("/my-reservations")({
   beforeLoad: requireAuth,
@@ -9,9 +10,9 @@ export const Route = createFileRoute("/my-reservations")({
 
 function MyReservationsPage() {
   const utils = trpc.useUtils();
-  const list = trpc.reservation.listByUser.useQuery();
-  const cancel = trpc.reservation.cancel.useMutation({
-    onSuccess: () => utils.reservation.listByUser.invalidate(),
+  const list = trpc.reservations.mine.useQuery();
+  const cancel = trpc.reservations.cancel.useMutation({
+    onSuccess: () => utils.reservations.mine.invalidate(),
   });
 
   return (
@@ -27,7 +28,8 @@ function MyReservationsPage() {
               <Link to="/resources/$resourceId" params={{ resourceId: res.resourceId }}>
                 {res.resourceName}
               </Link>{" "}
-              <span className="muted">{res.during}</span>{" "}
+              {res.title && <strong>{res.title}</strong>}{" "}
+              <span className="muted">{formatDuring(res.during)}</span>{" "}
               <button
                 className="error"
                 disabled={cancel.isPending}

@@ -1,22 +1,29 @@
 import { useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { trpc } from "../../lib/trpc";
 import { requireAuth } from "../../lib/auth-client";
 
+type ResourcesSearch = { kind?: "room" | "equipment" };
+
 export const Route = createFileRoute("/resources/")({
+  validateSearch: (search: Record<string, unknown>): ResourcesSearch =>
+    search.kind === "room" || search.kind === "equipment" ? { kind: search.kind } : {},
   beforeLoad: requireAuth,
   component: ResourcesPage,
 });
 
 function ResourcesPage() {
+  const { kind: filter } = Route.useSearch();
+  const navigate = useNavigate();
   const utils = trpc.useUtils();
-  const list = trpc.resource.list.useQuery();
-  const create = trpc.resource.create.useMutation({
-    onSuccess: () => utils.resource.list.invalidate(),
+  const list = trpc.resources.list.useQuery(filter ? { kind: filter } : undefined);
+  const create = trpc.resources.create.useMutation({
+    onSuccess: () => utils.resources.list.invalidate(),
   });
 
   const [name, setName] = useState("");
   const [kind, setKind] = useState("room");
+  const [capacity, setCapacity] = useState("");
 
   return (
     <div>
@@ -25,8 +32,9 @@ function ResourcesPage() {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          create.mutate({ name, kind });
+          create.mutate({ name, kind, capacity: capacity ? Number(capacity) : undefined });
           setName("");
+          setCapacity("");
         }}
       >
         <input
@@ -39,8 +47,33 @@ function ResourcesPage() {
           <option value="room">sala</option>
           <option value="equipment">sprzęt</option>
         </select>
+        <input
+          type="number"
+          min="1"
+          placeholder="pojemność"
+          aria-label="pojemność"
+          value={capacity}
+          onChange={(e) => setCapacity(e.target.value)}
+        />
         <button disabled={create.isPending}>Dodaj</button>
       </form>
+
+      <label>
+        Filtr:{" "}
+        <select
+          value={filter ?? ""}
+          onChange={(e) =>
+            navigate({
+              to: "/resources",
+              search: e.target.value ? { kind: e.target.value as "room" | "equipment" } : {},
+            })
+          }
+        >
+          <option value="">wszystkie</option>
+          <option value="room">sale</option>
+          <option value="equipment">sprzęt</option>
+        </select>
+      </label>
 
       {list.isPending ? (
         <p className="muted">Ładowanie…</p>
@@ -51,7 +84,10 @@ function ResourcesPage() {
               <Link to="/resources/$resourceId" params={{ resourceId: r.id }}>
                 {r.name}
               </Link>{" "}
-              <span className="muted">({r.kind})</span>
+              <span className="muted">
+                ({r.kind}
+                {r.capacity != null && `, ${r.capacity} miejsc`})
+              </span>
             </li>
           ))}
         </ul>
