@@ -1,12 +1,6 @@
-# Design Document — Atrium
+# Design Document - Atrium
 
 **System rezerwacji sal / sprzętu z kalendarzem**
-Przedmiot: Projektowanie Aplikacji Internetowych (PAI 2025/2026)
-*(Atrium to nazwa robocza — można podmienić.)*
-
-Decyzje technologiczne i ich uzasadnienia są opisane w osobnym dokumencie [`ADR.md`](./ADR.md). Ten dokument opisuje **co** budujemy i **jak** to działa.
-
----
 
 ## 1. Cel i zakres
 
@@ -36,17 +30,17 @@ Aplikacja to **modularny monolit** (jeden backend) i **SPA** komunikujące się 
 
 ```mermaid
 flowchart TB
-    subgraph Browser["Przeglądarka — SPA (React + Vite)"]
+    subgraph Browser["Przeglądarka - SPA (React + Vite)"]
         Router["TanStack Router<br/>(stan kalendarza w URL)"]
         Query["TanStack Query<br/>(server-state, invalidacja)"]
         TRPCClient["tRPC client"]
         AuthClient["Better Auth client"]
     end
 
-    subgraph API["apps/api — Bun + Hono"]
+    subgraph API["apps/api - Bun + Hono"]
         AuthH["Better Auth handler<br/>/api/auth/*"]
         TRPCH["tRPC fetch adapter<br/>/trpc"]
-        Ctx["createContext<br/>(odczyt sesji → protectedProcedure)"]
+        Ctx["createContext<br/>(odczyt sesji -> protectedProcedure)"]
     end
 
     subgraph DB["packages/db"]
@@ -65,7 +59,7 @@ flowchart TB
     class PG store;
 ```
 
-Typ `AppRouter` jest eksportowany z `apps/api` i importowany **type-only** przez `apps/web` (zależność workspace) — to nośnik type-safety, bez code generation.
+Typ `AppRouter` jest eksportowany z `apps/api` i importowany **type-only** przez `apps/web` (zależność workspace) - to nośnik type-safety, bez code generation.
 
 ## 4. Model danych
 
@@ -87,7 +81,7 @@ erDiagram
     resource {
         uuid id PK
         text name
-        text type "room | equipment"
+        text kind "room | equipment"
         text description
         int capacity
         timestamptz createdAt
@@ -98,7 +92,6 @@ erDiagram
         text userId FK
         tstzrange during "EXCLUDE gist"
         text title
-        text status "active | cancelled"
         timestamptz createdAt
     }
     session {
@@ -108,7 +101,7 @@ erDiagram
     }
 ```
 
-**Kluczowy element schematu** — constraint integralności na `reservation` (dopisywany ręczną migracją SQL, bo Drizzle nie wyraża `EXCLUDE` w builderze):
+**Kluczowy element schematu** - constraint integralności na `reservation` (dopisywany ręczną migracją SQL, bo Drizzle nie wyraża `EXCLUDE` w builderze):
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS btree_gist;
@@ -118,14 +111,14 @@ ALTER TABLE reservation
   EXCLUDE USING gist (
     resource_id WITH =,
     during      WITH &&
-  ) WHERE (status = 'active');
+  );
 ```
 
-`btree_gist` jest potrzebny, by zmieszać porównanie równości (`resource_id WITH =`) z operatorem nakładania zakresów (`during WITH &&`). Klauzula `WHERE (status = 'active')` sprawia, że anulowane rezerwacje zwalniają termin.
+`btree_gist` jest potrzebny, by zmieszać porównanie równości (`resource_id WITH =`) z operatorem nakładania zakresów (`during WITH &&`). Anulowanie rezerwacji to **twarde usunięcie** wiersza (hard delete) - usunięty wiersz nie uczestniczy już w constraincie, więc termin jest realnie zwalniany. Dzięki temu nie potrzeba kolumny `status` ani klauzuli `WHERE` w constraincie.
 
-## 5. Kluczowy przepływ: tworzenie rezerwacji i obsługa kolizji
+## 5. Tworzenie rezerwacji i obsługa kolizji
 
-Integralność jest egzekwowana przez bazę, więc aplikacja **nie sprawdza wolności slotu przed zapisem** — próbuje wstawić wiersz i reaguje na ewentualne naruszenie constraintu. To eliminuje race condition między odczytem a zapisem.
+Integralność jest egzekwowana przez bazę, więc aplikacja **nie sprawdza wolności slotu przed zapisem** - próbuje wstawić wiersz i reaguje na ewentualne naruszenie constraintu. To eliminuje race condition między odczytem a zapisem.
 
 ```mermaid
 sequenceDiagram
@@ -135,14 +128,14 @@ sequenceDiagram
     participant D as Drizzle / PostgreSQL
 
     U->>A: reservations.create({resourceId, start, end})
-    A->>A: protectedProcedure — walidacja sesji
+    A->>A: protectedProcedure - walidacja sesji
     A->>Z: walidacja wejścia
     Z-->>A: OK
     A->>D: INSERT reservation (transakcja)
     alt slot wolny
         D-->>A: wiersz utworzony
         A-->>U: success
-        U->>U: invalidate(availability) → kalendarz refetch
+        U->>U: invalidate(availability) -> kalendarz refetch
     else kolizja (błąd 23P01)
         D-->>A: exclusion_violation
         A-->>U: TRPCError CONFLICT ("Termin zajęty")
@@ -154,23 +147,28 @@ sequenceDiagram
 
 | Procedura | Typ | Ochrona | Opis |
 |---|---|---|---|
-| `auth.*` | Better Auth handler | — | rejestracja, logowanie, sesja (`/api/auth/*`) |
-| `resources.list` | query | publiczna/chroniona | lista zasobów, filtr po `type` |
+| `auth.*` | Better Auth handler | - | rejestracja, logowanie, sesja (`/api/auth/*`) |
+| `resources.list` | query | chroniona | lista zasobów, opcjonalny filtr po `kind` |
 | `resources.byId` | query | chroniona | szczegóły zasobu |
+| `resources.create` | mutation | chroniona | utworzenie zasobu |
+| `resources.update` | mutation | chroniona | edycja zasobu |
+| `resources.delete` | mutation | chroniona | usunięcie zasobu |
 | `availability.forResource` | query | chroniona | rezerwacje zasobu w danym zakresie dat (pod kalendarz) |
 | `reservations.create` | mutation | chroniona | utworzenie rezerwacji; mapuje kolizję na `CONFLICT` |
-| `reservations.cancel` | mutation | chroniona + ownership | anulowanie własnej rezerwacji (`status = 'cancelled'`) |
+| `reservations.cancel` | mutation | chroniona + ownership | anulowanie własnej rezerwacji (twarde usunięcie wiersza) |
 | `reservations.mine` | query | chroniona | rezerwacje zalogowanego użytkownika |
 
-Wejście każdej mutacji jest walidowane schematem **Zod**, który jednocześnie jest źródłem typu `input` — walidacja i typowanie z jednego miejsca.
+Wejście każdej mutacji jest walidowane schematem **Zod**, który jednocześnie jest źródłem typu `input` - walidacja i typowanie z jednego miejsca.
+
+Wszystkie procedury (poza handlerem `auth.*`) są **chronione** - cała aplikacja działa za logowaniem (ADR-7), stąd `resources.list` jest `protectedProcedure`, a nie endpointem publicznym. Zarządzanie zasobami (`resources.create/update/delete`) jest świadomie dostępne dla **każdego zalogowanego użytkownika** - nie wprowadza się ról administracyjnych, co jest spójne z zakresem z §1 („role administracyjne ponad właścicielstwo rezerwacji" pozostają poza zakresem). Autoryzacja na poziomie wiersza dotyczy wyłącznie rezerwacji (`reservations.cancel` - tylko właściciel).
 
 ## 7. Autentykacja i autoryzacja
 
-Better Auth obsługuje rejestrację/logowanie i utrzymuje **sesję w httpOnly cookie**. W `createContext` tRPC odczytujemy sesję z żądania; `protectedProcedure` odrzuca żądania bez ważnej sesji (`UNAUTHORIZED`). Autoryzacja na poziomie zasobu (np. anulowanie tylko własnej rezerwacji) jest sprawdzana w procedurze przez porównanie `reservation.userId` z `ctx.session.user.id` (`FORBIDDEN` w razie niezgodności). Szczegóły wyboru — [ADR-6](./ADR.md).
+Better Auth obsługuje rejestrację/logowanie i utrzymuje **sesję w httpOnly cookie**. W `createContext` tRPC odczytuje się sesję z żądania; `protectedProcedure` odrzuca żądania bez ważnej sesji (`UNAUTHORIZED`). Autoryzacja na poziomie zasobu (np. anulowanie tylko własnej rezerwacji) jest sprawdzana w procedurze przez porównanie `reservation.userId` z `ctx.session.user.id` (`FORBIDDEN` w razie niezgodności). Szczegóły wyboru - [ADR-6](./ADR.md).
 
 ## 8. Frontend
 
-SPA w React budowane przez Vite. **TanStack Router** trzyma stan widoku kalendarza w typowanych search params (`?week=…&resource=…`), więc widok jest linkowalny i odświeżalny. **TanStack Query** zarządza danymi serwerowymi: po udanej mutacji `reservations.create`/`cancel` unieważniamy zapytanie `availability.forResource`, dzięki czemu kalendarz odświeża się automatycznie. Globalnego store (Redux/Zustand) nie używamy — server-state pokrywa Query, a stan czysto kliencki trzymamy lokalnie. Szczegóły — [ADR-7](./ADR.md).
+SPA w React budowane przez Vite. **TanStack Router** trzyma stan widoku kalendarza w typowanych search params (`?week=…&resource=…`), więc widok jest linkowalny i odświeżalny. **TanStack Query** zarządza danymi serwerowymi: po udanej mutacji `reservations.create`/`cancel` unieważnia się zapytanie `availability.forResource`, dzięki czemu kalendarz odświeża się automatycznie. Globalnego store (Redux/Zustand) nie stosuje się - server-state pokrywa Query, a stan czysto kliencki trzyma się lokalnie. Szczegóły - [ADR-7](./ADR.md).
 
 ## 9. Stack technologiczny
 
@@ -201,32 +199,20 @@ Pełne uzasadnienia każdego wyboru: [`ADR.md`](./ADR.md).
 | `api` | Bun + Hono; czeka na zdrowy `db`; uruchamia migracje, potem serwer |
 | `web` | build Vite serwowany statycznie (lub dev server w trybie deweloperskim) |
 
-Sekwencja startu: `db` → migracje Drizzle (w tym migracja z `EXCLUDE`) → `api` → `web`. Skrypt `seed` wypełnia bazę przykładowymi zasobami i rezerwacjami do demo.
+Sekwencja startu: `db` -> migracje Drizzle (w tym migracja z `EXCLUDE`) -> `seed` -> `api` -> `web`. Skrypt `seed` (uruchamiany automatycznie w komendzie startowej usługi `api`) wypełnia bazę przykładowymi zasobami i rezerwacjami do demo; jest idempotentny - pomija niepustą bazę.
 
 ## 11. Strategia testów
 
 - **Jednostkowe (Vitest):** czysta logika pomocnicza (parsowanie zakresów dat, mapowanie błędów bazy na błędy tRPC, helpery kalendarza).
-- **Integracyjne (Vitest + realny Postgres z compose):** najważniejsze — próba utworzenia kolidującej rezerwacji musi zwrócić `CONFLICT`; anulowanie zwalnia termin; ochrona endpointów bez sesji.
-- **E2E (Playwright):** happy-path (logowanie → rezerwacja slotu) oraz scenariusz kolizji w UI.
+- **Integracyjne (Vitest + realny Postgres z compose):** najważniejsze - próba utworzenia kolidującej rezerwacji musi zwrócić `CONFLICT`; anulowanie zwalnia termin; ochrona endpointów bez sesji.
+- **E2E (Playwright):** happy-path (logowanie -> rezerwacja slotu) oraz scenariusz kolizji w UI.
 
-Constraint z ADR-4 testujemy na prawdziwej bazie, nigdy na mocku — inaczej test nie weryfikuje faktycznej gwarancji.
+Constraint z ADR-4 testuje się na prawdziwej bazie, nigdy na mocku - inaczej test nie weryfikuje faktycznej gwarancji.
 
-## 12. Elementy dodatkowe (opcjonalne)
-
-Dodawane tylko, jeśli realnie wykorzystane i uzasadnione:
-
-| Element | Zastosowanie |
-|---|---|
-| Walidacja | Zod jako `input` tRPC (wdrożone w core) |
-| Seed data | komenda wypełniająca bazę do demo (wdrożone w core) |
-| Cache | Redis/Valkey na zapytania o dostępność popularnych zakresów — z TTL i invalidacją po zapisie |
-| Task queue | asynchroniczne maile-przypomnienia o nadchodzącej rezerwacji |
-| Dokumentacja API | eksport tRPC → OpenAPI lub panel tRPC |
-
-## 13. Świadomie pominięte
+## 12. Świadomie pominięte
 
 Mikroserwisy / broker komunikatów ([ADR-9](./ADR.md)) oraz deployment na edge z Hyperdrive ([ADR-10](./ADR.md)) zostały rozważone i odrzucone jako złożoność bez wartości przy tej skali.
 
-## 14. Możliwe rozszerzenia
+## 13. Możliwe rozszerzenia
 
 Powtarzalne rezerwacje (reguły RRULE), role i uprawnienia administracyjne, kalendarz wielu zasobów obok siebie, eksport iCal, warstwa analityczna (obłożenie zasobów w czasie).
