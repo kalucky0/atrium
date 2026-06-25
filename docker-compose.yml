@@ -21,8 +21,9 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     restart: unless-stopped
-    # Migrations (incl. the EXCLUDE constraint) run before the API starts.
-    command: ["sh", "-c", "bun run packages/db/src/migrate.ts && bun run apps/api/src/index.ts"]
+    # Migrations (incl. the EXCLUDE constraint) then the idempotent seed (skips a
+    # non-empty DB) run before the API starts, so `docker compose up` gives a demo-ready stack.
+    command: ["sh", "-c", "bun run packages/db/src/migrate.ts && bun run packages/db/src/seed.ts && bun run apps/api/src/index.ts"]
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-atrium}:${POSTGRES_PASSWORD:-atrium}@db:5432/${POSTGRES_DB:-atrium}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-dev-secret-change-me-openssl-rand-base64-32}
