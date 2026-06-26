@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: atrium
+          POSTGRES_PASSWORD: atrium
+          POSTGRES_DB: atrium
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U atrium -d atrium"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://atrium:atrium@localhost:5432/atrium
+      BETTER_AUTH_SECRET: ci-secret-not-for-production
+      BETTER_AUTH_URL: http://localhost:3001
+      WEB_ORIGIN: http://localhost:5173
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3"
+
+      - run: cp .env.example .env
+
+      - run: bun install --frozen-lockfile
+
+      - name: Apply migrations (incl. EXCLUDE constraint + btree_gist)
+        run: bun run db:migrate
+
+      - name: Typecheck
+        run: bun run --filter @atrium/web typecheck
+
+      - name: Tests (unit + integration on real Postgres)
+        run: bun run test
