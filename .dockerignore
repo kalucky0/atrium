@@ -2,6 +2,5 @@
 .git
 .env
 **/dist
-apps/web/src/routeTree.gen.ts
 test-results
 playwright-report

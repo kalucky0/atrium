@@ -33,9 +33,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # Finder (MacOS) folder config
 .DS_Store
 
-# TanStack Router generated route tree (regenerated on dev/build)
-apps/web/src/routeTree.gen.ts
-
 # Playwright
 test-results
 playwright-report
